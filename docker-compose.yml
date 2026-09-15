@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  # Service PostgreSQL
+  postgres:
+    image: postgres:15-alpine
+    container_name: postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 1234
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Service de migration
+  migrate:
+    image: migrate/migrate:v4.16.2
+    container_name: migrate
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./migrations:/migrations
+    command: ["-path", "/migrations", "-database", "postgresql://postgres:1234@postgres:5432/postgres?sslmode=disable", "up"]
+    restart: on-failure
+
+  # Microservice utilisateur
+  user-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.user
+    container_name: user-service
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "8081:8081"
+    environment:
+      DB_URL: postgresql://postgres:pass@postgres:5432/postgres?sslmode=disable
+
+  # Microservice commandes
+  order-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.order
+    container_name: order-service
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "8082:8082"
+    environment:
+      DB_URL: postgresql://postgres:pass@postgres:5432/postgres?sslmode=disable
+
+volumes:
+  postgres_data:

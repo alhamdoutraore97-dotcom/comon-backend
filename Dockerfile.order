@@ -1,0 +1,18 @@
+FROM golang:1.27.0-alpine AS builder
+
+WORKDIR /app
+
+COPY go.mod go.sum ./
+COPY comon-backend ./comon-backend
+RUN go mod download
+
+COPY . .
+
+RUN CGO_ENABLED=0 GOOS=linux go build -o order-service cmd/order-service/main.go
+
+FROM alpine:latest
+RUN apk --no-cache add ca-certificates
+WORKDIR /root/
+COPY --from=builder /app/order-service .
+EXPOSE 8082
+CMD ["./order-service"]
